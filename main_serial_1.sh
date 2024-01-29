@@ -20,4 +20,4 @@ echo "SLURM_JOB_CPUS_PER_NODE = $SLURM_JOB_CPUS_PER_NODE"
 echo "SLURM_CPUS_ON_NODE = $SLURM_CPUS_ON_NODE"
 
 # Load Julia (using juliaup) and run script
-julia +1.9 main_serial_1.jl
+julia +1.9.0 main_serial_1.jl
