@@ -25,6 +25,7 @@ export MYTMP=/tmp/$USER/$SLURM_JOB_ID
 echo "Copying my data over..."
 cp -rp $SLURM_SUBMIT_DIR/data $MYTMP || exit $?
 
+# Lets us check that main_serial_2.jl is working with temp dir
 rm $MYTMP/data/foo.csv
 
 # Load Julia (using juliaup) and run script
