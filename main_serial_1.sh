@@ -2,8 +2,8 @@
 #SBATCH --job-name=serial_test_julia
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --output=results/out_serial_1.txt
-#SBATCH --error=results/err_serial_1.txt
+#SBATCH --output=results/out_serial_1-%j.txt
+#SBATCH --error=results/err_serial_1-%j.txt
 #SBATCH --exclusive
 
 # Print properties of job as submitted
