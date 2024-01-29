@@ -22,7 +22,7 @@ end
 # -----------
 
 # relevant directories
-indir = joinpath(@__DIR__, "data")
-outfile = joinpath(@__DIR__, "files.txt")
+indir = joinpath(ENV["MYTMP"], "data")
+outfile = joinpath(ENV["MYTMP"], "files.txt")
 
 list(indir, outfile)
