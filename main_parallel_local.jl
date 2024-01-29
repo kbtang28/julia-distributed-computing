@@ -1,3 +1,5 @@
+# for use on local machine
+
 using Distributed
 
 # instantiate and precompile environment
