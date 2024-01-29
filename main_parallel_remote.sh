@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=4
 #SBATCH --output=results/out_parallel_remote-%j.txt
-#SBATCH --error=results/out_parallel_remote-%j.txt
+#SBATCH --error=results/err_parallel_remote-%j.txt
 #SBATCH --exclusive
 
 # Print properties of job as submitted
