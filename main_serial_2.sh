@@ -20,7 +20,7 @@ echo "SLURM_JOB_CPUS_PER_NODE = $SLURM_JOB_CPUS_PER_NODE"
 echo "SLURM_CPUS_ON_NODE = $SLURM_CPUS_ON_NODE"
 
 # Copy data to local temp space on compute node
-MYTMP = /tmp/$USER/$SLURM_JOB_ID
+MYTMP=/tmp/$USER/$SLURM_JOB_ID
 /usr/bin/mkdir -p $MYTMP || exit $?
 echo "Copying my data over..."
 cp -rp $SLURM_SUBMIT_DIR/data $MYTMP || exit $?
