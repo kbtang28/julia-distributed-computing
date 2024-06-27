@@ -20,4 +20,4 @@ echo "SLURM_JOB_CPUS_PER_NODE = $SLURM_JOB_CPUS_PER_NODE"
 echo "SLURM_CPUS_ON_NODE = $SLURM_CPUS_ON_NODE"
 
 # Run the Julia code (specify version)
-julia +1.9.0 main_parallel_remote.jl
+julia +1.9.0 process_data_parallel_remote_ex.jl

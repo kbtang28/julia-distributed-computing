@@ -29,7 +29,7 @@ cp -rp $SLURM_SUBMIT_DIR/data $MYTMP || exit $?
 rm $MYTMP/data/foo.csv
 
 # Load Julia (using juliaup) and run script
-julia +1.9.0 main_serial_2.jl
+julia +1.9.0 temp_dir_ex.jl
 
 # Copy output back to home directory
 echo "Copying output back to $SLURM_SUBMIT_DIR"
