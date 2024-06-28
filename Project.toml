@@ -1,3 +1,6 @@
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DistributedArrays = "aaf54ef3-cdf8-58ed-94cc-d582ad619b94"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
+SharedArrays = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
+SlurmClusterManager = "c82cd089-7bf7-41d7-976b-6b5d413cbe0a"
