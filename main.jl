@@ -1,5 +1,13 @@
 using Distributed
 
+num_procs = parse(Int, ENV["SLURM_NTASKS"])
+addprocs(num_procs)
+
+# print info about processes and workers
+println("Number of processes: ", nprocs())
+println("Number of workers: ", nworkers())
+@everywhere println("Hello from $(myid()):$(gethostname())")
+
 # instantiate and precompile environment
 @everywhere begin
   using Pkg; Pkg.activate(@__DIR__)
