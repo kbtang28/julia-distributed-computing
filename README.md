@@ -1,23 +1,21 @@
-# The ultimate guide to distributed computing in Julia
+# A basic guide to distributed computing in Julia
 
-In this repository we collect relevant information for people interested in distributing simple function calls on multiple cluster nodes. Although the task is simple, there are some rough (undocumented) corners in the language that inhibit even experienced users from accomplishing it currently.
+This repository is a short introduction to distributed computing in Julia using [Distributed.jl](https://github.com/JuliaLang/Distributed.jl) and a nice sandbox for further exploration. The base code is forked from [this repo](https://github.com/Arpeggeo/julia-distributed-computing).
 
-We plan to update this document every now and then to reflect the latest (and cleanest) way of performing distributed computing with remote workers in Julia. If you read Julia forums, you will find many related threads where people shared solutions for specific problems, which are currently outdated. This is a central thread of discussion to solve most issues once and for all.
 
-## Sample script
+## Sample script for serial task
 
-We will consider a sample script that processes a set of files in a data folder and saves the results in a results folder. We did choose this task because it involves IO and file paths, which can get tricky in remote machines:
+We will consider the sample script `main_serial.jl` that processes a set of files in a data folder and saves the results in a results folder. We choose this task because it involves IO and file paths, which can get tricky on remote machines:
 
 ```julia
 # instantiate and precompile environment
 using Pkg; Pkg.activate(@__DIR__)
 Pkg.instantiate(); Pkg.precompile()
 
-# load dependencies
+# load dependencies and helper functions
 using ProgressMeter
 using CSV
 
-# helper functions
 function process(infile, outfile)
   # read file from disk
   csv = CSV.File(infile)
@@ -48,42 +46,80 @@ end
 
 We follow Julia’s best practices:
 
-1. We instantiate the environment in the host machine, which lives in the files `Project.toml` and `Manifest.toml` (the same directory of the script). Additionally, we precompile the project in case of heavy dependencies.
+1. We instantiate the environment in the host machine, which lives in the files `Project.toml` and `Manifest.toml` (in the same directory of the script). Additionally, we precompile the project in case of heavy dependencies.
 2. We then load the dependencies of the project, and define helper functions to be used.
 3. The main work is done in a loop that calls the helper function with various files.
 
-Let’s call this script `main.jl`. We can `cd` into the project directory and call the script as follows:
+On our local machine, we `cd` into the project directory and call the script as follows:
 
 ```shell
 $ julia main.jl
 ```
 
+On Hopper, we could submit this job using the following shell script:
+
+```shell
+#!/bin/bash
+#SBATCH --job-name=test_script
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --output=results/out-%j.txt
+#SBATCH --error=results/err-%j.txt
+
+# Print properties of job as submitted
+echo "SLURM_JOB_ID = $SLURM_JOB_ID"
+echo "SLURM_NTASKS = $SLURM_NTASKS"
+echo "SLURM_NTASKS_PER_NODE = $SLURM_NTASKS_PER_NODE"
+echo "SLURM_CPUS_PER_TASK = $SLURM_CPUS_PER_TASK"
+echo "SLURM_JOB_NUM_NODES = $SLURM_JOB_NUM_NODES"
+
+# Print properties of job as scheduled by Slurm
+echo "SLURM_JOB_NODELIST = $SLURM_JOB_NODELIST"
+echo "SLURM_TASKS_PER_NODE = $SLURM_TASKS_PER_NODE"
+echo "SLURM_JOB_CPUS_PER_NODE = $SLURM_JOB_CPUS_PER_NODE"
+echo "SLURM_CPUS_ON_NODE = $SLURM_CPUS_ON_NODE"
+
+# Run the Julia code (specify Julia version with juliaup)
+julia +1.9.0 main_serial.jl
+
+exit 0
+```
+
+If the above were saved in `run.sh`, we would use `sbatch run.sh` to submit the job.
+
 ## Parallelization (same machine)
 
-Our goal is to process the files in parallel. First, we will make minor modifications to the script to be able to run it with multiple processes on the same machine (e.g. the login node). This step is important for debugging:
+Our goal is to process the files in parallel on Hopper. First, we will make minor modifications to the script to be able to run it with multiple processes on the same machine. This step is important for debugging:
 
 - We load the `Distributed` stdlib to replace the simple `for` loop by a `pmap` call. `Distributed` is always available so we don’t need to instantiate the environment before loading it.
+- We use `addprocs` to add worker processes—in this case, a number of worker processes equal to the number of tasks requested.
 - We wrap the preamble into *two* `@everywhere` blocks. Two separate blocks are needed so that the environment is properly instantiated in all processes before we start loading packages.
 - We also add a `try-catch` to handle issues with specific files handled by different parallel processes.
 
-Here is the resulting script after the modifications:
+Here is the script `main.jl` with the above modifications:
 
 ```julia
 using Distributed
 
-# instantiate and precompile environment in all processes
+num_procs = parse(Int, ENV["SLURM_NTASKS"])
+addprocs(num_procs)
+
+# print info about processes and workers
+println("Number of processes: ", nprocs())
+println("Number of workers: ", nworkers())
+@everywhere println("Hello from $(myid()):$(gethostname())")
+
+# instantiate and precompile environment
 @everywhere begin
   using Pkg; Pkg.activate(@__DIR__)
   Pkg.instantiate(); Pkg.precompile()
 end
 
-# load dependencies in a *separate* @everywhere block
+# load dependencies and helper functions
 @everywhere begin
-  # load dependencies
   using ProgressMeter
   using CSV
 
-  # helper functions
   function process(infile, outfile)
     # read file from disk
     csv = CSV.File(infile)
@@ -108,6 +144,7 @@ infiles  = readdir(indir, join=true)
 outfiles = joinpath.(outdir, basename.(infiles))
 nfiles   = length(infiles)
 
+# process files in parallel
 status = @showprogress pmap(1:nfiles) do i
   try
     process(infiles[i], outfiles[i])
@@ -116,48 +153,42 @@ status = @showprogress pmap(1:nfiles) do i
     false # failure
   end
 end
+
+# report files that failed
+failed = infiles[.!status]
+if !isempty(failed)
+  println("List of files that failed:")
+  foreach(println, failed)
+end
 ```
 
-Now we can execute the script with multiple processes (e.g. 4):
-
-```shell
-$ julia -p 4 main.jl
-```
-
-## Parallelization (remote machines)
-
-Finally, we would like to run the script above in a cluster with hundreds of remote worker processes. We don’t know in advance how many processes will be available because this is the job of a job scheduler (e.g. Slurm, PBS). We have the option of using [ClusterManagers.jl](https://github.com/JuliaParallel/ClusterManagers.jl) and the option to call the julia executable from a job script directly.
-
-Suppose we are in a cluster that uses the PBS job scheduler. We can write a PBS script that calls Julia and tells it where the hosts are using the `--machine-file` option:
+On Hopper, we could submit this job—using `sbatch` as before—using the following shell script:
 
 ```shell
 #!/bin/bash
-#PBS -l nodes=4:ppn=12,walltime=00:05:00
-#PBS -N test_julia
-#PBS -q debug
+#SBATCH --job-name=test_script
+#SBATCH --nodes=1
+#SBATCH --ntasks=4 
+#SBATCH --output=results/out-%j.txt
+#SBATCH --error=results/err-%j.txt
 
-julia --machine-file=$PBS_NODEFILE main.jl
+# Print properties of job as submitted
+echo "SLURM_JOB_ID = $SLURM_JOB_ID"
+echo "SLURM_NTASKS = $SLURM_NTASKS"
+echo "SLURM_NTASKS_PER_NODE = $SLURM_NTASKS_PER_NODE"
+echo "SLURM_CPUS_PER_TASK = $SLURM_CPUS_PER_TASK"
+echo "SLURM_JOB_NUM_NODES = $SLURM_JOB_NUM_NODES"
+
+# Print properties of job as scheduled by Slurm
+echo "SLURM_JOB_NODELIST = $SLURM_JOB_NODELIST"
+echo "SLURM_TASKS_PER_NODE = $SLURM_TASKS_PER_NODE"
+echo "SLURM_JOB_CPUS_PER_NODE = $SLURM_JOB_CPUS_PER_NODE"
+echo "SLURM_CPUS_ON_NODE = $SLURM_CPUS_ON_NODE"
+
+# Run the Julia code (specify Julia version with juliaup)
+julia +1.9.0 main_serial.jl
+
+exit 0
 ```
 
-Alternatively, suppose we are in a cluster that uses the LSF job scheduler:
-
-```shell
-#!/bin/bash
-#BSUB -n 20
-#BSUB -J test_julia
-#BSUB -q debug
-
-julia --machine-file=$LSB_DJOB_HOSTFILE main.jl
-```
-
-Alternatively, suppose we are in a cluster that uses the Slurm job scheduler:
-
-```shell
-#!/bin/bash
-#SBATCH --job-name=test_julia
-#SBATCH --ntasks=20
-
-export SLURM_NODEFILE=`generate_pbs_nodefile`
-
-julia --machine-file=$SLURM_NODEFILE main.jl
-```
+Notice that we have specified `--ntasks=4`. See the CAC's [Slurm tutorial](https://www.cac.cornell.edu/techdocs/clusterinfo/slurm/) for more information about the various flags you can set.
